@@ -12,8 +12,8 @@ from scipy.spatial.transform import Rotation as R
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
 xml_path = os.path.join(current_dir, "robots/universal_robots_ur5e/ur5e.xml")
-model = pin.buildModelFromMJCF(xml_path)
-data = model.createData()
+pin_model = pin.buildModelFromMJCF(xml_path)
+pin_data = pin_model.createData()
 
 def skew_to_vector(skew_matrix):
     """Extract the vector from a skew-symmetric matrix"""
@@ -30,13 +30,9 @@ def vector_to_skew(x):
     
 def so3_error(R, Rd):
     """Compute orientation error"""    
-    is_zero = (np.allclose(R, np.zeros(R.shape))) or (np.allclose(Rd, np.zeros(Rd.shape)))
-    if is_zero: return np.zeros((3,))
-    
-    error_matrix = Rd@R.T
-    error_log = logm(error_matrix)
-    error_vector = skew_to_vector(error_log)
-    return error_vector
+    # print(f'R {R}')
+    # print(f'Rd {Rd}')
+    return pin.log3(Rd@R.T)
 
 def forward_kinematics(q_pos):
     pass
@@ -120,12 +116,27 @@ def create_circle_trajectory(radius, center, n_points, duration):
         'time': t
     }
 
+def trajectory_to_point():
+    state = np.array([.0, 1.0, 1.0, 2.0, .0, .0, .0, 1.0, .0, .0, .0, 1.0])
+    d_state = 0.5*np.ones(6)
+    dd_state = np.zeros(6)
+    return {
+        'state': [state],
+        'd_state': [d_state],
+        'dd_state': [dd_state],
+        # 'time': t
+    }
+    
+
 def tsid_controller(sim, data: mujoco.MjData, state:np.array, target: np.array) -> np.ndarray:
     """Task space inverse dynamics controller."""
-    model = sim.model
+    global pin_model, pin_data
+    pin.computeAllTerms(pin_model, pin_data, state['q'], state['dq'])
     
-    kp = np.array([1000, 1000, 1000, 10, 10, 0.1])
-    kd = np.array([200, 200, 200, 2, 2, 0.01])
+    kp = np.array([200,  200, 200, 200,200,200])
+    kd = np.array([200,  200, 200, 200,200,200])
+    # kp = np.array([1000, 1000, 1000, 10, 10, 0.1])
+    # kd = np.array([200, 200, 200, 2.5, 2.5, 0.01])
     K0 = kp*np.eye(6)
     K1 = kd*np.eye(6)
     
@@ -133,42 +144,42 @@ def tsid_controller(sim, data: mujoco.MjData, state:np.array, target: np.array) 
     Rd = Xd[3:].reshape((3,3))
     Xd_dot = target['d_state'] # (6, )
     Xd_ddot = target['dd_state'] # (6, )
+    # print(f'target {target}')
+    # a_q computations 
+    ee_frame_id = pin_model.getFrameId("end_effector")
+    ee_pose = pin_data.oMf[ee_frame_id]
+    ee_position = ee_pose.translation # [x,y,z]
+    ee_rotation = ee_pose.rotation # R
+    frame = pin.WORLD
+    J = pin.getFrameJacobian(pin_model, pin_data, ee_frame_id, frame)
+    J_inv = np.linalg.inv(J)
+    J_d = pin.computeJointJacobiansTimeVariation(pin_model, 
+                                                 pin_data, 
+                                                 state['q'], 
+                                                 state['dq'])
     
-    ee_id = mujoco.mj_name2id(model, mujoco.mjtObj.mjOBJ_BODY, "end_effector")
-    ee_position = data.xpos[ee_id]
-    ee_rotation = data.xmat[ee_id].reshape(3, 3)
+    pos_err = ee_position-Xd[:3]
+    orientation_err = so3_error(R=ee_rotation, Rd=Rd)
+    err = np.hstack((pos_err, orientation_err))
     
-    J = np.zeros((6, model.nv))
-    mujoco.mj_jacBody(model, data, J[:3], J[3:], ee_id)
-    J_inv = np.linalg.pinv(J)
+    ee_twist = pin.getFrameVelocity(pin_model, pin_data, ee_frame_id, frame).vector
+    d_pos_err = ee_twist[:3]-Xd_dot[:3]
+    d_orientation_err = so3_error(R=vector_to_skew(ee_twist[3:]) @ ee_rotation,
+                                  Rd=vector_to_skew(Xd_dot[3:]) @ Rd)
+    d_err = np.hstack((d_pos_err, d_orientation_err))
     
-    # Approximate J_d using finite differences
-    h = 1e-6
-    mujoco.mj_forward(model, data)
-    J_prev = J.copy()
-    data.qvel += h
-    mujoco.mj_forward(model, data)
-    mujoco.mj_jacBody(model, data, J[:3], J[3:], ee_id)
-    J_d = (J - J_prev) / h
-    data.qvel -= h
-    mujoco.mj_forward(model, data)
+    a_X = Xd_ddot - K0@err - K1@d_err
     
-    pos_term2 = K0[:3, :3]@(ee_position-Xd[:3]).reshape((3,1))
-    ee_velocity = J@state['dq']
-    pos_term3 = K1[:3, :3]@(ee_velocity[:3]-Xd_dot[:3]).reshape((3,1))
-    R_dot = vector_to_skew(ee_velocity[3:]) @ ee_rotation
-    Rd_dot = vector_to_skew(Xd_dot[3:]) @ Rd
-    
-    a_pos = Xd_ddot[:3] - pos_term2.flatten() - pos_term3.flatten() # (3, 1)
+    a_q = J_inv @ (a_X - J_d@state['dq'])
 
-    a_angular = Xd_ddot[3:] - skew_to_vector(K0[3:, 3:]@vector_to_skew(so3_error(ee_rotation, Rd))) - skew_to_vector(K1[3:, 3:]@vector_to_skew(so3_error(Rd_dot, R_dot)))
+    # computing control from a_q
+    M = pin_data.M
+    nle = pin_data.nle
     
-    a_X = np.hstack((a_pos, a_angular))
+    tau = M@a_q + nle
+    # print(f'ee_rotation {ee_rotation}')
     
-    a_q = J_inv @ (a_X - J_d@sim.get_state()['dq'])
-    print(f'a_q {a_q}')
-    
-    return a_q
+    return tau
     
 def plot_results(times: np.ndarray, positions: np.ndarray, velocities: np.ndarray):
     """Plot and save simulation results."""
@@ -218,12 +229,14 @@ def main():
     t = 0
     dt = sim.dt
     time_limit = 10.0
-    sim.trajectory = create_circle_trajectory(
-        radius=0.8,
-        center=np.array([.0,.0,1.]),
-        n_points=int(time_limit//dt),
-        duration=int(time_limit) # TODO: check! 
-    )
+    # sim.trajectory = create_circle_trajectory(
+    #     radius=1.0,
+    #     center=np.array([1.0,1.0,1.]),
+    #     n_points=int(time_limit//dt),
+    #     duration=int(time_limit) # TODO: check! 
+    # )
+    
+    sim.trajectory = trajectory_to_point()
     current_target = 0
     reached = False
     
@@ -232,7 +245,7 @@ def main():
     positions = []
     velocities = []
     
-    while t < time_limit:
+    while t < time_limit and current_target < 1:
         target = {'state': sim.trajectory['state'][current_target], # (12, )
                   'd_state': sim.trajectory['d_state'][current_target], # (6, )
                   'dd_state': sim.trajectory['dd_state'][current_target]} # (6, )
@@ -280,8 +293,8 @@ if __name__ == "__main__":
     # print("State shape:", trajectory['state'].shape)
     # print("d_state shape:", trajectory['d_state'].shape)
     # print("dd_state shape:", trajectory['dd_state'].shape)
-    # print(trajectory['state'][0])
-    # print(trajectory['dd_state'][0])
+    # print(trajectory['state'][:10])
+    # print(trajectory['dd_state'][:10])
     
     # print(trajectory['state'])
     
