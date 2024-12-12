@@ -44,7 +44,7 @@ def task_space_controller(q: np.ndarray, dq: np.ndarray, t: float, desired: Dict
     # Convert to pose and SE3
     desired_pose = np.concatenate([desired_position, desired_quaternion_pin])
     desired_se3 = pin.XYZQUATToSE3(desired_pose)
-    print(desired_se3)
+    print(desired_position)
     # Get end-effector frame
     ee_frame_id = model.getFrameId("end_effector")
     

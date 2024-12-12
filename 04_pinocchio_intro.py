@@ -96,6 +96,7 @@ pin.updateFramePlacement(model, data, ee_frame_id)
 twist = pin.getFrameVelocity(model, data, ee_frame_id, frame)
 dtwist = pin.getFrameAcceleration(model, data, ee_frame_id, frame)
 J = pin.getFrameJacobian(model, data, ee_frame_id, frame)
+Jd = pin.computeJointJacobiansTimeVariation(model, data, q, dq)
 
 # ===========================
 # Frame and Spatial Operations
@@ -120,6 +121,8 @@ print(f"Rotation Matrix:\n{ee_rotation}")
 print(f"Twist: {twist}")
 print(f"Acceleration: {dtwist}")
 print(f"\nGeometric Jacobian (Local):\n{J}")
+print(f"\n Jacobian shape :\n{J.shape}")
+print(f"\n Jacobian time-derivative :\n{Jd}")
 print(f"\nDesired Twist: {desired_twist}")
 print(f"\nQuaternion: {pos_quat[3:]}")
 print(f"\nLogarithm of Rotation Matrix:\n{log_R}")
