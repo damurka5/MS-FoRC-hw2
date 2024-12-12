@@ -67,7 +67,7 @@ def main():
     
     print("\nRunning step-by-step simulation...")
     sim = Simulator(
-        xml_path="mujoco_template/robots/universal_robots_ur5e/scene.xml",
+        xml_path="robots/universal_robots_ur5e/scene.xml",
         dt=0.001,
         enable_task_space=False,
         show_viewer=False,

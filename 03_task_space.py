@@ -38,8 +38,8 @@ def task_space_controller(q: np.ndarray, dq: np.ndarray, t: float, desired: Dict
     tau = kp * (q0 - q) - kd * dq
     
     # Convert desired pose to SE3
-    desired_position = desired['pos']
-    desired_quaternion = desired['quat'] # [w, x, y, z] in MuJoCo format
+    desired_position = desired['pos'] # <np.array>
+    desired_quaternion = desired['quat'] # [w, x, y, z] in MuJoCo format <np.array>
     desired_quaternion_pin = np.array([*desired_quaternion[1:], desired_quaternion[0]]) # Convert to [x,y,z,w] for Pinocchio
     # Convert to pose and SE3
     desired_pose = np.concatenate([desired_position, desired_quaternion_pin])
@@ -56,9 +56,9 @@ def main():
     
     print("\nRunning task space controller...")
     sim = Simulator(
-        xml_path="mujoco_template/robots/universal_robots_ur5e/scene.xml",
+        xml_path="robots/universal_robots_ur5e/scene.xml",
         enable_task_space=True,
-        show_viewer=True,
+        show_viewer=False,
         record_video=True,
         video_path="logs/videos/03_task_space.mp4",
         fps=30,
