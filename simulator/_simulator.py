@@ -128,7 +128,8 @@ class Simulator:
                  video_path: str = "logs/videos/simulation.mp4",
                  fps: int = 30,
                  width: int = 1280,
-                 height: int = 720) -> None:
+                 height: int = 720,
+                 trajectory: dict = None) -> None:
         """Initialize simulator with visualization options.
         
         Args:
@@ -149,6 +150,7 @@ class Simulator:
         
         # Task space control option
         self.enable_task_space = enable_task_space
+        self.trajectory = trajectory
         
         # Visualization options
         self.show_viewer = show_viewer
@@ -334,7 +336,8 @@ class Simulator:
                 'ee_rot': self.data.site(self.site_id).xmat.copy(),
                 'desired': {
                     'pos': self.data.mocap_pos[self.mocap_id].copy(),
-                    'quat': self.data.mocap_quat[self.mocap_id].copy()
+                    'quat': self.data.mocap_quat[self.mocap_id].copy(),
+                    'trajectory': self.trajectory
                 }
             })
             
