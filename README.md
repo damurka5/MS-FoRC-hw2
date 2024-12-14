@@ -1,43 +1,14 @@
-# Robot Control Examples
+# Task Space Inverse Dynamics
 
-A collection of examples demonstrating robot control and dynamics computation using MuJoCo and Pinocchio.
+This repo is a copy of [forc](https://github.com/simeon-ned/forc/tree/master/hw) and contains implementation of Task Space Inverse Dynamics. The algorithm is taken from book "Robot Modeling and Control" by Mark W. Spong, Seth Hutchinson, and M. Vidyasagar.
 
-This template builds upon Kevin Zakka's [MuJoCo Control](https://github.com/kevinzakka/mjctrl/tree/main) repository. The main differences are that it uses [Pinocchio](https://github.com/stack-of-tasks/pinocchio) for robot dynamics computations instead of MuJoCo's built-in engine, supports different actuator types (position, velocity, torque) based on Lev Kozlov's [Actuator Types](https://github.com/lvjonok/mujoco-actuators-types) implementation, and provides a simplified simulation interface to help users focus on control design.
+## Navigation
 
-## Setup
-
-Create environment using conda/mamba: 
-
-```bash
-conda env create -f env.yml
-conda activate forc_hw
-```
-
-## Examples
-The examples allow for both quazi-real-time visualization and headless operation giving the user flexibility in how they run the simulations.
-
-- `01_joint_space.py`: Simple PD control in joint space with visualization
-- `02_step_by_step.py`: Step-by-step simulation in headless mode with data logging and plotting
-- `03_task_space.py`: Task space control template for target tracking
-- `04_pinocchio_intro.py`: Introduction to robot dynamics computation using Pinocchio
-
-
-## Interaction with Viewer
-
-To apply disturbances or move the site for the task space controller:
-
-1. `Double click` - Select the body you want to interact with
-2. Hold `Ctrl` + mouse buttons:
-   - `Left mouse` - Change orientation/apply torque
-   - `Right mouse` - Change position/apply force
-
-
-## Notes
-
-- Videos are saved in `logs/videos/`
-- Plots are saved in `logs/plots/`
-- The simulator supports both real-time visualization and headless operation
-- All examples use the UR5e robot model
+- Videos are saved in `logs/videos/`. The solution for TSID is in `05_joint_space.mp4`.
+- Plots are saved in `logs/plots/`. The joint positions are on `05_positions.png` velocities are on `05_velocities.png`.
+- All my notes and equations are in `notes/2024-12-12-Note-10-24_annotated.pdf`.
+- `05_TSID.py`: TSID implementation and simulation on a straigth line trajectory. 
+- All examples use the UR5e robot model.
 
 The structure of the repository is as follows:
 ```bash
@@ -46,4 +17,21 @@ The structure of the repository is as follows:
 │ └── plots/ # Generated plots
 ├── robots/ # Robot models
 └── simulator/ # Simulator class
+└── notes/ # Equations taken from book and all math presented here
 ```
+
+## Results
+
+I generated a trajectory - straigth line with `start=[0.5, -0.2, 0.5]`, `end=[0.5, 0.2, 0.5]` in [x, y, z] world frame coordinates, trajectory of end effector has a constant orientation described as unit quatrenion. 
+
+### Joint positions during trajectory traversing
+![positions](logs/plots/05_positions.png)
+
+### Joint velocities during trajectory traversing
+![velocities](logs/plots/05_velocities.png)
+
+## Conclusion
+
+Task Space Inverse Dynamics control equations were obtained and simulation implemented. This method allows to generate control signals based on the end effector position in task-space. 
+
+The first point of trajectory was achieved only after ~6.5 seconds from start, it indicates that $K_p$ and $K_d$ gains should be tuned more. After the robot achieves first point on trajectory it easily follows the path with constant orientation. 
